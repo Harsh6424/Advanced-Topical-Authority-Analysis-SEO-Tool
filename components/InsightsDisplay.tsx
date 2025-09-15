@@ -1,14 +1,25 @@
-import React from 'react';
+import React, { useState, useRef } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import type { AiInsights, ChartData } from '../types';
-import { RestartIcon, BackIcon, EmailIcon } from './Icons';
+import type { AiInsights, ChartData, CategorySummary, SubcategorySummary, ChatMessage } from '../types';
+import { InsightIcon, SaveIcon, PdfIcon } from './Icons';
+import ChatBox from './ChatBox';
+import PdfReport from './PdfReport';
+
+// Define jsPDF and html2canvas from global scope
+declare const jspdf: any;
+declare const html2canvas: any;
 
 interface InsightsDisplayProps {
   insights: AiInsights | null;
   chartData: ChartData[];
-  onReset: () => void;
-  onGoBack: () => void;
-  onGoToEmail: () => void;
+  analysisData: CategorySummary[];
+  subcategoryAnalysisData: SubcategorySummary[];
+  websiteDomain: string | null;
+  onSaveToHistory: () => void;
+  isSaved: boolean;
+  chatHistory: ChatMessage[];
+  isChatLoading: boolean;
+  onSendMessage: (message: string) => void;
 }
 
 const InsightCard: React.FC<{title: string; children: React.ReactNode}> = ({ title, children }) => (
@@ -31,19 +42,50 @@ const CustomLegend = () => (
     </div>
 );
 
+const InsightsDisplay: React.FC<InsightsDisplayProps> = (props) => {
+  const { insights, chartData, onSaveToHistory, isSaved, websiteDomain } = props;
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const reportRef = useRef<HTMLDivElement>(null);
 
-const InsightsDisplay: React.FC<InsightsDisplayProps> = ({ insights, chartData, onReset, onGoBack, onGoToEmail }) => {
+  const handleDownloadPdf = async () => {
+    if (!insights) return;
+    setIsGeneratingPdf(true);
+    
+    // Allow the PdfReport component to render before capturing
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    if (reportRef.current) {
+        try {
+            const canvas = await html2canvas(reportRef.current, {
+                scale: 2, // Higher scale for better quality
+                useCORS: true,
+                backgroundColor: '#111827' // Match dark background
+            });
+            const imgData = canvas.toDataURL('image/png');
+            const { jsPDF } = jspdf;
+            const pdf = new jsPDF({
+                orientation: 'p',
+                unit: 'px',
+                format: [canvas.width, canvas.height]
+            });
+            pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+            
+            const sanitizedDomain = websiteDomain ? websiteDomain.replace(/\./g, '_') : 'report';
+            const fileName = `Topical_Authority_Report_${sanitizedDomain}.pdf`;
+            pdf.save(fileName);
+
+        } catch (error) {
+            console.error("Error generating PDF:", error);
+            alert("Failed to generate PDF. See console for details.");
+        }
+    }
+    setIsGeneratingPdf(false);
+  };
+
   if (!insights) {
     return (
       <div className="text-center">
         <p>No insights to display.</p>
-        <button
-          onClick={onReset}
-          className="mt-4 inline-flex items-center px-4 py-2 border border-gray-600 text-sm font-medium rounded-md text-gray-200 bg-gray-700 hover:bg-gray-600"
-        >
-          <RestartIcon className="w-5 h-5 mr-2"/>
-          Start Over
-        </button>
       </div>
     );
   }
@@ -55,34 +97,32 @@ const InsightsDisplay: React.FC<InsightsDisplayProps> = ({ insights, chartData, 
 
   return (
     <div className="space-y-8">
-      <div>
-        <h2 className="text-2xl font-semibold text-white">Step 3: Strategic Insights</h2>
-      </div>
-
-       <div className="flex flex-col sm:flex-row gap-4">
+       {isGeneratingPdf && (
+            <div style={{ position: 'absolute', left: '-9999px', top: 0, width: '800px' }}>
+                <PdfReport ref={reportRef} {...props} />
+            </div>
+        )}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <h2 className="text-2xl font-semibold text-white">Strategic Insights</h2>
+        <div className="flex flex-col sm:flex-row gap-2">
             <button
-              onClick={onGoToEmail}
-              className="flex-1 inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-cyan-600 hover:bg-cyan-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 focus:ring-offset-gray-800 transition-transform transform hover:scale-105"
+              onClick={handleDownloadPdf}
+              disabled={isGeneratingPdf}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 border border-gray-600 text-sm font-medium rounded-md text-gray-200 bg-gray-700 hover:bg-gray-600 transition-colors disabled:opacity-50"
             >
-              <EmailIcon className="w-5 h-5 mr-2" />
-              Next: Draft Email
+              <PdfIcon className="w-5 h-5" />
+              {isGeneratingPdf ? 'Generating...' : 'Download PDF'}
             </button>
-           <button
-             onClick={onGoBack}
-             className="flex-1 inline-flex items-center justify-center px-6 py-3 border border-gray-600 text-sm font-medium rounded-md text-gray-200 bg-gray-700 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 focus:ring-offset-gray-800 transition-colors"
-           >
-              <BackIcon className="w-5 h-5 mr-2"/>
-              Back to Analysis
-           </button>
-           <button
-             onClick={onReset}
-             className="flex-1 sm:flex-none inline-flex items-center justify-center px-6 py-3 border border-gray-600 text-sm font-medium rounded-md text-gray-200 bg-gray-700 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 focus:ring-offset-gray-800 transition-colors"
-           >
-              <RestartIcon className="w-5 h-5 mr-2"/>
-              Start Over
-           </button>
+            <button
+              onClick={onSaveToHistory}
+              disabled={isSaved}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 focus:ring-offset-gray-800 transition-all disabled:bg-gray-600 disabled:cursor-not-allowed"
+            >
+              <SaveIcon className="w-5 h-5" />
+              {isSaved ? 'Saved' : 'Save to History'}
+            </button>
         </div>
-
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div className="md:col-span-2">
@@ -90,6 +130,19 @@ const InsightsDisplay: React.FC<InsightsDisplayProps> = ({ insights, chartData, 
                 <p className="text-gray-300 whitespace-pre-line">{insights.summary}</p>
             </InsightCard>
         </div>
+
+        {insights.nextBigTopic && (
+             <div className="md:col-span-2">
+                <div className="bg-purple-900/40 p-6 rounded-lg border border-purple-700 ring-2 ring-purple-600/50">
+                    <h3 className="text-xl font-semibold mb-3 text-purple-300 flex items-center gap-2">
+                        <InsightIcon className="w-6 h-6"/>
+                        Next Big Opportunity
+                    </h3>
+                    <p className="text-2xl font-bold text-white mb-2">{insights.nextBigTopic.topicName}</p>
+                    <p className="text-purple-200">{insights.nextBigTopic.reasoning}</p>
+                </div>
+            </div>
+        )}
         
         <InsightCard title="Key Insights">
           <ul className="list-disc list-inside space-y-2 text-gray-300">
@@ -97,7 +150,6 @@ const InsightsDisplay: React.FC<InsightsDisplayProps> = ({ insights, chartData, 
           </ul>
         </InsightCard>
 
-        {/* FIX: Corrected closing tag for InsightCard below. It was </Card> and has been changed to </InsightCard>. */}
         <InsightCard title="Strategic Recommendations">
           <ul className="list-disc list-inside space-y-2 text-gray-300">
             {insights.recommendations.map((rec, index) => <li key={index}>{rec}</li>)}
@@ -132,6 +184,12 @@ const InsightsDisplay: React.FC<InsightsDisplayProps> = ({ insights, chartData, 
           </div>
         </InsightCard>
       </div>
+
+      <ChatBox 
+        history={props.chatHistory}
+        isLoading={props.isChatLoading}
+        onSendMessage={props.onSendMessage}
+      />
     </div>
   );
 };

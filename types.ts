@@ -1,4 +1,4 @@
-export type AppStep = 'upload' | 'results' | 'insights' | 'email';
+export type AppStep = 'upload' | 'results' | 'insights' | 'email' | 'history';
 
 export interface CsvRow {
   URL: string;
@@ -28,14 +28,45 @@ export interface CategorySummary {
   performanceTier: 'top' | 'potential' | 'standard';
 }
 
+export interface SubcategorySummary {
+  Subcategory: string;
+  ParentCategory: string;
+  articleCount: number;
+  totalClicks: number;
+  totalImpressions: number;
+  averageClicks: number;
+  performanceTier: 'top' | 'potential' | 'standard';
+}
+
 export interface AiInsights {
   summary: string;
   insights: string[];
   recommendations: string[];
+  nextBigTopic: {
+    topicName: string;
+    reasoning: string;
+  };
 }
 
 export interface ChartData {
   name: string;
   averageClicks: number;
   performanceTier: 'top' | 'potential';
+}
+
+export interface HistoryEntry {
+  id: number; // Using timestamp for simplicity
+  date: string;
+  fileName: string;
+  websiteDomain: string | null;
+  categorizedData: CategorizedUrlData[];
+  analysisData: CategorySummary[];
+  subcategoryAnalysisData: SubcategorySummary[];
+  insights: AiInsights;
+  chartData: ChartData[];
+}
+
+export interface ChatMessage {
+    role: 'user' | 'model';
+    content: string;
 }

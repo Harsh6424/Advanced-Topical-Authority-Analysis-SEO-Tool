@@ -1,14 +1,11 @@
 import React, { useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import type { AiInsights, ChartData, CategorySummary } from '../types';
-import { RestartIcon, BackIcon } from './Icons';
 
 interface EmailDraftProps {
   insights: AiInsights | null;
   chartData: ChartData[];
   analysisData: CategorySummary[];
-  onReset: () => void;
-  onGoBack: () => void;
 }
 
 const InsightCard: React.FC<{title: string; children: React.ReactNode; className?: string}> = ({ title, children, className }) => (
@@ -32,7 +29,7 @@ const CustomLegend = () => (
 );
 
 
-const EmailDraft: React.FC<EmailDraftProps> = ({ insights, chartData, analysisData, onReset, onGoBack }) => {
+const EmailDraft: React.FC<EmailDraftProps> = ({ insights, chartData, analysisData }) => {
   const [partnerName, setPartnerName] = useState('<Partner Name>');
   const [copySuccess, setCopySuccess] = useState<string>('');
 
@@ -42,42 +39,31 @@ const EmailDraft: React.FC<EmailDraftProps> = ({ insights, chartData, analysisDa
     const topPerformers = analysisData.filter(
       (cat) => cat.performanceTier === 'top'
     );
+    
+    let emailBody = `Hi ${partnerName},\n\n`;
 
-    if (topPerformers.length === 0) {
-      return `Hi ${partnerName},
-
-We've completed the content performance analysis. While we didn't identify any clear top-performing categories in this batch, the full report and charts are available for review.
-
-Let's discuss our strategy based on the detailed data.
-
-Best regards,
-The Content Team
-`;
+    if (topPerformers.length > 0) {
+        const topPerformersList = topPerformers
+          .map(
+            (cat) =>
+              `- ${cat.Category}: Averaging ${cat.averageClicks.toLocaleString()} clicks across ${cat.articleCount} articles.`
+          )
+          .join('\n');
+        
+        emailBody += `Following our recent content performance analysis, we've identified our top-performing categories. These topics are proven winners, consistently driving high engagement.\n\nHere are the key top-performing categories:\n${topPerformersList}\n\nOur strategic recommendation is to double down on these themes to capitalize on their proven track record.\n\n`;
+    } else {
+        emailBody += `We've completed the content performance analysis. While we didn't identify any clear top-performing categories in this batch, we did find other valuable insights.\n\n`;
     }
 
-    const topPerformersList = topPerformers
-      .map(
-        (cat) =>
-          `- ${cat.Category}: Averaging ${cat.averageClicks.toLocaleString()} clicks across ${cat.articleCount} articles.`
-      )
-      .join('\n');
+    if (insights.nextBigTopic) {
+        emailBody += `Additionally, our analysis has surfaced a promising new content opportunity:\n\n**Next Big Topic:** ${insights.nextBigTopic.topicName}\n**Reasoning:** ${insights.nextBigTopic.reasoning}\n\nThis could be a great area to explore for future content creation.\n\n`;
+    }
+    
+    emailBody += `The chart below provides a visual overview of the top and high-potential performers. Please include a screenshot of it in your final email.\n\nBest regards,\nThe Content Team`;
+    
+    const subject = `Subject: Content Performance Insights: Top Categories & Next Big Opportunity`;
 
-    return `Subject: Key Content Performance Insights & Top-Performing Categories
-
-Hi ${partnerName},
-
-Following our recent content performance analysis, we've identified our top-performing categories. These topics are proven winners, consistently driving high engagement and demonstrating what resonates most with our audience.
-
-Here are the key top-performing categories:
-${topPerformersList}
-
-Our strategic recommendation is to double down on these themes. By creating more content within these successful categories, we can capitalize on their proven track record and further solidify our topical authority.
-
-The chart below provides a visual overview of these top performers. Please include a screenshot of it in your final email.
-
-Best regards,
-The Content Team
-`;
+    return `${subject}\n\n${emailBody}`;
   };
   
   const handleCopy = () => {
@@ -102,16 +88,8 @@ The Content Team
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h2 className="text-2xl font-semibold text-white">Step 4: Draft Email for Partner</h2>
-        <div className="flex items-center gap-2">
-           <button onClick={onGoBack} className="inline-flex items-center px-4 py-2 border border-gray-600 text-sm font-medium rounded-md text-gray-200 bg-gray-700 hover:bg-gray-600">
-              <BackIcon className="w-5 h-5 mr-2"/> Back to Insights
-           </button>
-           <button onClick={onReset} className="inline-flex items-center px-4 py-2 border border-gray-600 text-sm font-medium rounded-md text-gray-200 bg-gray-700 hover:bg-gray-600">
-              <RestartIcon className="w-5 h-5 mr-2"/> Start Over
-           </button>
-        </div>
+      <div>
+        <h2 className="text-2xl font-semibold text-white">Draft Email for Partner</h2>
       </div>
       
       <div className="space-y-4">

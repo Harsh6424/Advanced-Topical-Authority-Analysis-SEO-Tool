@@ -1,5 +1,18 @@
 import * as XLSX from 'xlsx';
-import type { CsvRow, CategorizedItem, CategorizedUrlData, CategorySummary } from '../types';
+import type { CsvRow, CategorizedItem, CategorizedUrlData, CategorySummary, SubcategorySummary } from '../types';
+
+export function getDomainFromUrl(url: string): string | null {
+  try {
+    // Ensure the URL has a protocol, otherwise URL constructor fails
+    const fullUrl = url.startsWith('http://') || url.startsWith('https://') ? url : `https://${url}`;
+    const hostname = new URL(fullUrl).hostname;
+    // Remove 'www.' prefix if it exists
+    return hostname.replace(/^www\./, '');
+  } catch (error) {
+    console.warn(`Could not parse domain from URL: ${url}`, error);
+    return null;
+  }
+}
 
 export function parseCsv(csvText: string): CsvRow[] {
   try {
@@ -46,9 +59,15 @@ export function parseCsv(csvText: string): CsvRow[] {
 export function processCategorizedData(
   categorizedResults: CategorizedItem[],
   originalCsvData: CsvRow[]
-): { categorizedUrls: CategorizedUrlData[], categorySummaries: CategorySummary[] } {
+): { 
+  categorizedUrls: CategorizedUrlData[], 
+  categorySummaries: CategorySummary[],
+  subcategorySummaries: SubcategorySummary[]
+} {
   const categorizedMap = new Map(categorizedResults.map(item => [item.url, { category: item.category, subcategory: item.subcategory }]));
   const categoryTotals: { [key: string]: { clicks: number, impressions: number, count: number } } = {};
+  const subcategoryTotals: { [key: string]: { clicks: number, impressions: number, count: number } } = {}; // Key: "Category::Subcategory"
+
 
   const mergedData = originalCsvData.map(row => {
     const categorization = categorizedMap.get(row.URL) || { category: 'Uncategorized', subcategory: 'Uncategorized' };
@@ -60,6 +79,15 @@ export function processCategorizedData(
     categoryTotals[category].clicks += row.Clicks;
     categoryTotals[category].impressions += row.Impressions;
     categoryTotals[category].count += 1;
+    
+    const subcategoryKey = `${category}::${subcategory}`;
+    if (!subcategoryTotals[subcategoryKey]) {
+        subcategoryTotals[subcategoryKey] = { clicks: 0, impressions: 0, count: 0 };
+    }
+    subcategoryTotals[subcategoryKey].clicks += row.Clicks;
+    subcategoryTotals[subcategoryKey].impressions += row.Impressions;
+    subcategoryTotals[subcategoryKey].count += 1;
+
     return { ...row, Category: category, Subcategory: subcategory };
   });
 
@@ -73,7 +101,11 @@ export function processCategorizedData(
     };
   });
   
-  const allSummaries: Omit<CategorySummary, 'performanceTier'>[] = Object.entries(categoryTotals).map(([category, totals]) => ({
+  const ARTICLE_COUNT_THRESHOLD = 2;
+  const TOP_N = 5;
+
+  // Process Categories
+  const allCategorySummaries: Omit<CategorySummary, 'performanceTier'>[] = Object.entries(categoryTotals).map(([category, totals]) => ({
     Category: category,
     articleCount: totals.count,
     totalClicks: totals.clicks,
@@ -81,47 +113,69 @@ export function processCategorizedData(
     averageClicks: totals.count > 0 ? parseFloat((totals.clicks / totals.count).toFixed(2)) : 0,
   }));
   
-  const ARTICLE_COUNT_THRESHOLD = 2;
-  const TOP_N = 5;
-
-  // Identify top performers (green) from categories with enough articles
-  const topPerformers = allSummaries
+  const categoryTopPerformersSet = new Set(allCategorySummaries
     .filter(s => s.articleCount > ARTICLE_COUNT_THRESHOLD)
     .sort((a, b) => b.averageClicks - a.averageClicks)
     .slice(0, TOP_N)
-    .map(s => s.Category);
-  const topPerformersSet = new Set(topPerformers);
+    .map(s => s.Category));
 
-  // Identify potential performers (orange) from categories with few articles
-  const potentialPerformers = allSummaries
+  const categoryPotentialPerformersSet = new Set(allCategorySummaries
     .filter(s => s.articleCount <= ARTICLE_COUNT_THRESHOLD)
     .sort((a, b) => b.averageClicks - a.averageClicks)
     .slice(0, TOP_N)
-    .map(s => s.Category);
-  const potentialPerformersSet = new Set(potentialPerformers);
+    .map(s => s.Category));
 
-  let finalSummaries: CategorySummary[] = allSummaries.map(summary => {
+  let categorySummaries: CategorySummary[] = allCategorySummaries.map(summary => {
     let tier: CategorySummary['performanceTier'] = 'standard';
-    if (topPerformersSet.has(summary.Category)) {
-        tier = 'top';
-    } else if (potentialPerformersSet.has(summary.Category)) {
-        tier = 'potential';
-    }
+    if (categoryTopPerformersSet.has(summary.Category)) tier = 'top';
+    else if (categoryPotentialPerformersSet.has(summary.Category)) tier = 'potential';
     return { ...summary, performanceTier: tier };
+  }).sort((a, b) => b.averageClicks - a.averageClicks);
+
+  // Process Subcategories
+  const allSubcategorySummaries: Omit<SubcategorySummary, 'performanceTier'>[] = Object.entries(subcategoryTotals).map(([key, totals]) => {
+      const [parentCategory, subcategory] = key.split('::');
+      return {
+          Subcategory: subcategory,
+          ParentCategory: parentCategory,
+          articleCount: totals.count,
+          totalClicks: totals.clicks,
+          totalImpressions: totals.impressions,
+          averageClicks: totals.count > 0 ? parseFloat((totals.clicks / totals.count).toFixed(2)) : 0,
+      };
   });
 
-  // Sort the final list for display purposes, keeping high-performers at the top
-  finalSummaries.sort((a, b) => b.averageClicks - a.averageClicks);
+  const subcategoryTopPerformersSet = new Set(allSubcategorySummaries
+      .filter(s => s.articleCount > ARTICLE_COUNT_THRESHOLD)
+      .sort((a, b) => b.averageClicks - a.averageClicks)
+      .slice(0, TOP_N)
+      .map(s => s.Subcategory));
 
+  const subcategoryPotentialPerformersSet = new Set(allSubcategorySummaries
+      .filter(s => s.articleCount <= ARTICLE_COUNT_THRESHOLD)
+      .sort((a, b) => b.averageClicks - a.averageClicks)
+      .slice(0, TOP_N)
+      .map(s => s.Subcategory));
 
-  return { categorizedUrls, categorySummaries: finalSummaries };
+  let subcategorySummaries: SubcategorySummary[] = allSubcategorySummaries.map(summary => {
+      let tier: SubcategorySummary['performanceTier'] = 'standard';
+      if (subcategoryTopPerformersSet.has(summary.Subcategory)) tier = 'top';
+      else if (subcategoryPotentialPerformersSet.has(summary.Subcategory)) tier = 'potential';
+      return { ...summary, performanceTier: tier };
+  }).sort((a, b) => b.averageClicks - a.averageClicks);
+
+  return { categorizedUrls, categorySummaries, subcategorySummaries };
 }
 
 export function exportToExcel(
   categorizedData: CategorizedUrlData[],
   summaryData: CategorySummary[],
-  fileName: string = 'Topical_Authority_Analysis.xlsx'
+  subcategorySummaryData: SubcategorySummary[],
+  domainName: string | null
 ): void {
+  const sanitizedDomain = domainName ? domainName.replace(/\./g, '_') : 'report';
+  const fileName = `Topical_Authority_Analysis_${sanitizedDomain}.xlsx`;
+
   const detailedWs = XLSX.utils.json_to_sheet(categorizedData.map(d => ({
     URL: d.URL,
     Category: d.Category,
@@ -131,8 +185,19 @@ export function exportToExcel(
     'Clicks Contribution %': d.Clicks_Contribution_Percentage,
     'Impressions Contribution %': d.Impressions_Contribution_Percentage,
   })));
-  const summaryWs = XLSX.utils.json_to_sheet(summaryData.map(s => ({
+  
+  const categorySummaryWs = XLSX.utils.json_to_sheet(summaryData.map(s => ({
     Category: s.Category,
+    '# of Articles': s.articleCount,
+    'Total Clicks': s.totalClicks,
+    'Total Impressions': s.totalImpressions,
+    'Average Clicks': s.averageClicks,
+    'Performance Tier': s.performanceTier.charAt(0).toUpperCase() + s.performanceTier.slice(1),
+  })));
+  
+  const subcategorySummaryWs = XLSX.utils.json_to_sheet(subcategorySummaryData.map(s => ({
+    Subcategory: s.Subcategory,
+    'Parent Category': s.ParentCategory,
     '# of Articles': s.articleCount,
     'Total Clicks': s.totalClicks,
     'Total Impressions': s.totalImpressions,
@@ -142,7 +207,8 @@ export function exportToExcel(
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, detailedWs, 'Detailed Report');
-  XLSX.utils.book_append_sheet(wb, summaryWs, 'Category Summary');
+  XLSX.utils.book_append_sheet(wb, categorySummaryWs, 'Category Summary');
+  XLSX.utils.book_append_sheet(wb, subcategorySummaryWs, 'Subcategory Summary');
 
   XLSX.writeFile(wb, fileName);
 }
