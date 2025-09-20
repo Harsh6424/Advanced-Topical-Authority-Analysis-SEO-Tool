@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import type { CsvRow, CategorizedItem, CategorizedUrlData, CategorySummary, SubcategorySummary } from '../types';
+import type { CsvRow, CategorizedItem, CategorizedUrlData, CategorySummary, SubcategorySummary, DiscoverCategorySummary, DiscoverSubcategorySummary } from '../types';
 
 export function getDomainFromUrl(url: string): string | null {
   try {
@@ -62,82 +62,84 @@ export function processCategorizedData(
 ): { 
   categorizedUrls: CategorizedUrlData[], 
   categorySummaries: CategorySummary[],
-  subcategorySummaries: SubcategorySummary[]
+  subcategorySummaries: SubcategorySummary[],
+  discoverCategorySummaries: DiscoverCategorySummary[],
+  discoverSubcategorySummaries: DiscoverSubcategorySummary[],
+  discoverTop100Urls: CategorizedUrlData[]
 } {
-  const categorizedMap = new Map(categorizedResults.map(item => [item.url, { category: item.category, subcategory: item.subcategory }]));
-  const categoryTotals: { [key: string]: { clicks: number, impressions: number, count: number } } = {};
-  const subcategoryTotals: { [key: string]: { clicks: number, impressions: number, count: number } } = {}; // Key: "Category::Subcategory"
+  const categorizedMap = new Map(categorizedResults.map(item => [item.url, { contentTheme: item.contentTheme, entity: item.entity, subEntity: item.subEntity }]));
+  
+  const mergedData: Omit<CategorizedUrlData, 'Clicks_Contribution_Percentage' | 'Impressions_Contribution_Percentage'>[] = originalCsvData.map(row => {
+    const categorization = categorizedMap.get(row.URL) || { contentTheme: 'Uncategorized', entity: 'Uncategorized', subEntity: 'N/A' };
+    return { ...row, ContentTheme: categorization.contentTheme, Entity: categorization.entity, SubEntity: categorization.subEntity };
+  });
 
+  // --- Standard Topical Authority Analysis (Average Clicks) ---
+  const themeTotals: { [key: string]: { clicks: number, impressions: number, count: number } } = {};
+  const entityTotals: { [key: string]: { clicks: number, impressions: number, count: number } } = {}; // Key: "Theme::Entity"
 
-  const mergedData = originalCsvData.map(row => {
-    const categorization = categorizedMap.get(row.URL) || { category: 'Uncategorized', subcategory: 'Uncategorized' };
-    const { category, subcategory } = categorization;
-
-    if (!categoryTotals[category]) {
-      categoryTotals[category] = { clicks: 0, impressions: 0, count: 0 };
+  mergedData.forEach(row => {
+    if (!themeTotals[row.ContentTheme]) {
+      themeTotals[row.ContentTheme] = { clicks: 0, impressions: 0, count: 0 };
     }
-    categoryTotals[category].clicks += row.Clicks;
-    categoryTotals[category].impressions += row.Impressions;
-    categoryTotals[category].count += 1;
+    themeTotals[row.ContentTheme].clicks += row.Clicks;
+    themeTotals[row.ContentTheme].impressions += row.Impressions;
+    themeTotals[row.ContentTheme].count += 1;
     
-    const subcategoryKey = `${category}::${subcategory}`;
-    if (!subcategoryTotals[subcategoryKey]) {
-        subcategoryTotals[subcategoryKey] = { clicks: 0, impressions: 0, count: 0 };
+    const entityKey = `${row.ContentTheme}::${row.Entity}`;
+    if (!entityTotals[entityKey]) {
+        entityTotals[entityKey] = { clicks: 0, impressions: 0, count: 0 };
     }
-    subcategoryTotals[subcategoryKey].clicks += row.Clicks;
-    subcategoryTotals[subcategoryKey].impressions += row.Impressions;
-    subcategoryTotals[subcategoryKey].count += 1;
-
-    return { ...row, Category: category, Subcategory: subcategory };
+    entityTotals[entityKey].clicks += row.Clicks;
+    entityTotals[entityKey].impressions += row.Impressions;
+    entityTotals[entityKey].count += 1;
   });
 
   const categorizedUrls: CategorizedUrlData[] = mergedData.map(row => {
-    const totalCatClicks = categoryTotals[row.Category].clicks;
-    const totalCatImpressions = categoryTotals[row.Category].impressions;
+    const totalThemeClicks = themeTotals[row.ContentTheme]?.clicks || 0;
+    const totalThemeImpressions = themeTotals[row.ContentTheme]?.impressions || 0;
     return {
       ...row,
-      Clicks_Contribution_Percentage: totalCatClicks > 0 ? parseFloat(((row.Clicks / totalCatClicks) * 100).toFixed(2)) : 0,
-      Impressions_Contribution_Percentage: totalCatImpressions > 0 ? parseFloat(((row.Impressions / totalCatImpressions) * 100).toFixed(2)) : 0,
+      Clicks_Contribution_Percentage: totalThemeClicks > 0 ? parseFloat(((row.Clicks / totalThemeClicks) * 100).toFixed(2)) : 0,
+      Impressions_Contribution_Percentage: totalThemeImpressions > 0 ? parseFloat(((row.Impressions / totalThemeImpressions) * 100).toFixed(2)) : 0,
     };
   });
   
   const ARTICLE_COUNT_THRESHOLD = 2;
   const TOP_N = 5;
 
-  // Process Categories
-  const allCategorySummaries: Omit<CategorySummary, 'performanceTier'>[] = Object.entries(categoryTotals).map(([category, totals]) => ({
-    Category: category,
+  const allThemeSummaries: Omit<CategorySummary, 'performanceTier'>[] = Object.entries(themeTotals).map(([theme, totals]) => ({
+    ContentTheme: theme,
     articleCount: totals.count,
     totalClicks: totals.clicks,
     totalImpressions: totals.impressions,
     averageClicks: totals.count > 0 ? parseFloat((totals.clicks / totals.count).toFixed(2)) : 0,
   }));
   
-  const categoryTopPerformersSet = new Set(allCategorySummaries
+  const themeTopPerformersSet = new Set(allThemeSummaries
     .filter(s => s.articleCount > ARTICLE_COUNT_THRESHOLD)
     .sort((a, b) => b.averageClicks - a.averageClicks)
     .slice(0, TOP_N)
-    .map(s => s.Category));
+    .map(s => s.ContentTheme));
 
-  const categoryPotentialPerformersSet = new Set(allCategorySummaries
+  const themePotentialPerformersSet = new Set(allThemeSummaries
     .filter(s => s.articleCount <= ARTICLE_COUNT_THRESHOLD)
     .sort((a, b) => b.averageClicks - a.averageClicks)
     .slice(0, TOP_N)
-    .map(s => s.Category));
+    .map(s => s.ContentTheme));
 
-  let categorySummaries: CategorySummary[] = allCategorySummaries.map(summary => {
+  let categorySummaries: CategorySummary[] = allThemeSummaries.map(summary => {
     let tier: CategorySummary['performanceTier'] = 'standard';
-    if (categoryTopPerformersSet.has(summary.Category)) tier = 'top';
-    else if (categoryPotentialPerformersSet.has(summary.Category)) tier = 'potential';
+    if (themeTopPerformersSet.has(summary.ContentTheme)) tier = 'top';
+    else if (themePotentialPerformersSet.has(summary.ContentTheme)) tier = 'potential';
     return { ...summary, performanceTier: tier };
-  }).sort((a, b) => b.averageClicks - a.averageClicks);
+  }).sort((a, b) => b.totalClicks - a.totalClicks);
 
-  // Process Subcategories
-  const allSubcategorySummaries: Omit<SubcategorySummary, 'performanceTier'>[] = Object.entries(subcategoryTotals).map(([key, totals]) => {
-      const [parentCategory, subcategory] = key.split('::');
+  const allEntitySummaries: Omit<SubcategorySummary, 'performanceTier'>[] = Object.entries(entityTotals).map(([key, totals]) => {
+      const [parentTheme, entity] = key.split('::');
       return {
-          Subcategory: subcategory,
-          ParentCategory: parentCategory,
+          Entity: entity,
+          ParentTheme: parentTheme,
           articleCount: totals.count,
           totalClicks: totals.clicks,
           totalImpressions: totals.impressions,
@@ -145,32 +147,113 @@ export function processCategorizedData(
       };
   });
 
-  const subcategoryTopPerformersSet = new Set(allSubcategorySummaries
+  const entityTopPerformersSet = new Set(allEntitySummaries
       .filter(s => s.articleCount > ARTICLE_COUNT_THRESHOLD)
       .sort((a, b) => b.averageClicks - a.averageClicks)
       .slice(0, TOP_N)
-      .map(s => s.Subcategory));
+      .map(s => s.Entity));
 
-  const subcategoryPotentialPerformersSet = new Set(allSubcategorySummaries
+  const entityPotentialPerformersSet = new Set(allEntitySummaries
       .filter(s => s.articleCount <= ARTICLE_COUNT_THRESHOLD)
       .sort((a, b) => b.averageClicks - a.averageClicks)
       .slice(0, TOP_N)
-      .map(s => s.Subcategory));
+      .map(s => s.Entity));
 
-  let subcategorySummaries: SubcategorySummary[] = allSubcategorySummaries.map(summary => {
+  let subcategorySummaries: SubcategorySummary[] = allEntitySummaries.map(summary => {
       let tier: SubcategorySummary['performanceTier'] = 'standard';
-      if (subcategoryTopPerformersSet.has(summary.Subcategory)) tier = 'top';
-      else if (subcategoryPotentialPerformersSet.has(summary.Subcategory)) tier = 'potential';
+      if (entityTopPerformersSet.has(summary.Entity)) tier = 'top';
+      else if (entityPotentialPerformersSet.has(summary.Entity)) tier = 'potential';
       return { ...summary, performanceTier: tier };
-  }).sort((a, b) => b.averageClicks - a.averageClicks);
+  }).sort((a, b) => b.totalClicks - a.totalClicks);
 
-  return { categorizedUrls, categorySummaries, subcategorySummaries };
+  // --- Google Discover Analysis (Total Clicks from Top 100) ---
+  const discoverTop100Urls = [...categorizedUrls].sort((a, b) => b.Clicks - a.Clicks).slice(0, 100);
+
+  const discoverThemeTotals: { [key: string]: { clicks: number, count: number } } = {};
+  const discoverEntityTotals: { [key: string]: { clicks: number, count: number } } = {};
+
+  discoverTop100Urls.forEach(row => {
+    // Theme totals for discover
+    if (!discoverThemeTotals[row.ContentTheme]) {
+      discoverThemeTotals[row.ContentTheme] = { clicks: 0, count: 0 };
+    }
+    discoverThemeTotals[row.ContentTheme].clicks += row.Clicks;
+    discoverThemeTotals[row.ContentTheme].count += 1;
+
+    // Entity totals for discover
+    const entityKey = `${row.ContentTheme}::${row.Entity}`;
+    if (!discoverEntityTotals[entityKey]) {
+      discoverEntityTotals[entityKey] = { clicks: 0, count: 0 };
+    }
+    discoverEntityTotals[entityKey].clicks += row.Clicks;
+    discoverEntityTotals[entityKey].count += 1;
+  });
+
+  const DISCOVER_ARTICLE_COUNT_THRESHOLD = 2; // More than 2 articles for "Top"
+  const DISCOVER_TOP_N = 5;
+
+  // Process Discover Themes
+  const allDiscoverThemeSummaries: Omit<DiscoverCategorySummary, 'performanceTier'>[] = Object.entries(discoverThemeTotals).map(([theme, totals]) => ({
+    ContentTheme: theme,
+    articleCount: totals.count,
+    totalClicks: totals.clicks,
+  }));
+  
+  const discoverThemeTopPerformers = allDiscoverThemeSummaries
+    .sort((a, b) => b.totalClicks - a.totalClicks)
+    .slice(0, DISCOVER_TOP_N);
+
+  const discoverCategorySummaries: DiscoverCategorySummary[] = allDiscoverThemeSummaries.map(summary => {
+    const topPerformerInfo = discoverThemeTopPerformers.find(p => p.ContentTheme === summary.ContentTheme);
+    let tier: DiscoverCategorySummary['performanceTier'] = 'standard';
+    if (topPerformerInfo) {
+      tier = topPerformerInfo.articleCount > DISCOVER_ARTICLE_COUNT_THRESHOLD ? 'top' : 'potential';
+    }
+    return { ...summary, performanceTier: tier };
+  }).sort((a, b) => b.totalClicks - a.totalClicks);
+
+
+  // Process Discover Entities
+  const allDiscoverEntitySummaries: Omit<DiscoverSubcategorySummary, 'performanceTier'>[] = Object.entries(discoverEntityTotals).map(([key, totals]) => {
+    const [parentTheme, entity] = key.split('::');
+    return {
+      Entity: entity,
+      ParentTheme: parentTheme,
+      articleCount: totals.count,
+      totalClicks: totals.clicks,
+    };
+  });
+
+  const discoverEntityTopPerformers = allDiscoverEntitySummaries
+    .sort((a, b) => b.totalClicks - a.totalClicks)
+    .slice(0, DISCOVER_TOP_N);
+
+  const discoverSubcategorySummaries: DiscoverSubcategorySummary[] = allDiscoverEntitySummaries.map(summary => {
+    const topPerformerInfo = discoverEntityTopPerformers.find(p => p.Entity === summary.Entity && p.ParentTheme === summary.ParentTheme);
+    let tier: DiscoverSubcategorySummary['performanceTier'] = 'standard';
+    if (topPerformerInfo) {
+        tier = topPerformerInfo.articleCount > DISCOVER_ARTICLE_COUNT_THRESHOLD ? 'top' : 'potential';
+    }
+    return { ...summary, performanceTier: tier };
+  }).sort((a, b) => b.totalClicks - a.totalClicks);
+
+  return { 
+    categorizedUrls, 
+    categorySummaries, 
+    subcategorySummaries,
+    discoverCategorySummaries,
+    discoverSubcategorySummaries,
+    discoverTop100Urls
+  };
 }
 
 export function exportToExcel(
   categorizedData: CategorizedUrlData[],
   summaryData: CategorySummary[],
   subcategorySummaryData: SubcategorySummary[],
+  discoverCategoryData: DiscoverCategorySummary[],
+  discoverSubcategoryData: DiscoverSubcategorySummary[],
+  discoverTop100Data: CategorizedUrlData[],
   domainName: string | null
 ): void {
   const sanitizedDomain = domainName ? domainName.replace(/\./g, '_') : 'report';
@@ -178,16 +261,17 @@ export function exportToExcel(
 
   const detailedWs = XLSX.utils.json_to_sheet(categorizedData.map(d => ({
     URL: d.URL,
-    Category: d.Category,
-    Subcategory: d.Subcategory,
+    'Content Theme': d.ContentTheme,
+    'Entity': d.Entity,
+    'Sub Entity': d.SubEntity,
     Clicks: d.Clicks,
     Impressions: d.Impressions,
     'Clicks Contribution %': d.Clicks_Contribution_Percentage,
     'Impressions Contribution %': d.Impressions_Contribution_Percentage,
   })));
   
-  const categorySummaryWs = XLSX.utils.json_to_sheet(summaryData.map(s => ({
-    Category: s.Category,
+  const themeSummaryWs = XLSX.utils.json_to_sheet(summaryData.map(s => ({
+    'Content Theme': s.ContentTheme,
     '# of Articles': s.articleCount,
     'Total Clicks': s.totalClicks,
     'Total Impressions': s.totalImpressions,
@@ -195,9 +279,9 @@ export function exportToExcel(
     'Performance Tier': s.performanceTier.charAt(0).toUpperCase() + s.performanceTier.slice(1),
   })));
   
-  const subcategorySummaryWs = XLSX.utils.json_to_sheet(subcategorySummaryData.map(s => ({
-    Subcategory: s.Subcategory,
-    'Parent Category': s.ParentCategory,
+  const entitySummaryWs = XLSX.utils.json_to_sheet(subcategorySummaryData.map(s => ({
+    'Entity': s.Entity,
+    'Parent Theme': s.ParentTheme,
     '# of Articles': s.articleCount,
     'Total Clicks': s.totalClicks,
     'Total Impressions': s.totalImpressions,
@@ -205,10 +289,35 @@ export function exportToExcel(
     'Performance Tier': s.performanceTier.charAt(0).toUpperCase() + s.performanceTier.slice(1),
   })));
 
+  const discoverThemeWs = XLSX.utils.json_to_sheet(discoverCategoryData.map(s => ({
+    'Content Theme': s.ContentTheme,
+    '# Articles (in Top 100)': s.articleCount,
+    'Total Clicks (from Top 100)': s.totalClicks,
+    'Discover Tier': s.performanceTier.charAt(0).toUpperCase() + s.performanceTier.slice(1),
+  })));
+
+  const discoverEntityWs = XLSX.utils.json_to_sheet(discoverSubcategoryData.map(s => ({
+    'Entity': s.Entity,
+    'Parent Theme': s.ParentTheme,
+    '# Articles (in Top 100)': s.articleCount,
+    'Total Clicks (from Top 100)': s.totalClicks,
+    'Discover Tier': s.performanceTier.charAt(0).toUpperCase() + s.performanceTier.slice(1),
+  })));
+
+  const discoverDetailedWs = XLSX.utils.json_to_sheet(discoverTop100Data.map(d => ({
+    URL: d.URL,
+    Entity: d.Entity,
+    'Sub Entity': d.SubEntity,
+    Clicks: d.Clicks,
+  })));
+
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, detailedWs, 'Detailed Report');
-  XLSX.utils.book_append_sheet(wb, categorySummaryWs, 'Category Summary');
-  XLSX.utils.book_append_sheet(wb, subcategorySummaryWs, 'Subcategory Summary');
+  XLSX.utils.book_append_sheet(wb, detailedWs, 'Detailed URL Report');
+  XLSX.utils.book_append_sheet(wb, themeSummaryWs, 'Topical Authority - Theme');
+  XLSX.utils.book_append_sheet(wb, entitySummaryWs, 'Topical Authority - Entity');
+  XLSX.utils.book_append_sheet(wb, discoverThemeWs, 'Discover Perf - Theme');
+  XLSX.utils.book_append_sheet(wb, discoverEntityWs, 'Discover Perf - Entity');
+  XLSX.utils.book_append_sheet(wb, discoverDetailedWs, 'Discover Top 100 Details');
 
   XLSX.writeFile(wb, fileName);
 }

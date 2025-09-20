@@ -46,13 +46,13 @@ const EmailDraft: React.FC<EmailDraftProps> = ({ insights, chartData, analysisDa
         const topPerformersList = topPerformers
           .map(
             (cat) =>
-              `- ${cat.Category}: Averaging ${cat.averageClicks.toLocaleString()} clicks across ${cat.articleCount} articles.`
+              `- ${cat.ContentTheme}: Averaging ${cat.averageClicks.toLocaleString()} clicks across ${cat.articleCount} articles.`
           )
           .join('\n');
         
-        emailBody += `Following our recent content performance analysis, we've identified our top-performing categories. These topics are proven winners, consistently driving high engagement.\n\nHere are the key top-performing categories:\n${topPerformersList}\n\nOur strategic recommendation is to double down on these themes to capitalize on their proven track record.\n\n`;
+        emailBody += `Following our recent content performance analysis, we've identified our top-performing content themes. These topics are proven winners, consistently driving high engagement.\n\nHere are the key top-performing themes:\n${topPerformersList}\n\nOur strategic recommendation is to double down on these themes to capitalize on their proven track record.\n\n`;
     } else {
-        emailBody += `We've completed the content performance analysis. While we didn't identify any clear top-performing categories in this batch, we did find other valuable insights.\n\n`;
+        emailBody += `We've completed the content performance analysis. While we didn't identify any clear top-performing content themes in this batch, we did find other valuable insights.\n\n`;
     }
 
     if (insights.nextBigTopic) {
@@ -61,7 +61,7 @@ const EmailDraft: React.FC<EmailDraftProps> = ({ insights, chartData, analysisDa
     
     emailBody += `The chart below provides a visual overview of the top and high-potential performers. Please include a screenshot of it in your final email.\n\nBest regards,\nThe Content Team`;
     
-    const subject = `Subject: Content Performance Insights: Top Categories & Next Big Opportunity`;
+    const subject = `Subject: Content Performance Insights: Top Themes & Next Big Opportunity`;
 
     return `${subject}\n\n${emailBody}`;
   };

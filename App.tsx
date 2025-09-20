@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import type { AppStep, CategorizedUrlData, CategorySummary, SubcategorySummary, AiInsights, ChartData, CsvRow, HistoryEntry, ChatMessage } from './types';
+import type { AppStep, CategorizedUrlData, CategorySummary, SubcategorySummary, AiInsights, ChartData, CsvRow, HistoryEntry, ChatMessage, DiscoverCategorySummary, DiscoverSubcategorySummary } from './types';
 import { categorizeUrlsFromCsv, fetchInsights, fetchChatResponse } from './services/geminiService';
 import { parseCsv, processCategorizedData, getDomainFromUrl } from './utils/dataUtils';
 import { useLocalStorage } from './hooks/useLocalStorage';
@@ -25,10 +25,14 @@ const App: React.FC = () => {
   const [websiteDomain, setWebsiteDomain] = useState<string | null>(null);
   const [originalData, setOriginalData] = useState<CsvRow[]>([]);
   const [categorizedData, setCategorizedData] = useState<CategorizedUrlData[]>([]);
-  const [analysisData, setAnalysisData] = useState<CategorySummary[]>([]);
-  const [subcategoryAnalysisData, setSubcategoryAnalysisData] = useState<SubcategorySummary[]>([]);
+  const [themeAnalysisData, setThemeAnalysisData] = useState<CategorySummary[]>([]);
+  const [entityAnalysisData, setEntityAnalysisData] = useState<SubcategorySummary[]>([]);
   const [insights, setInsights] = useState<AiInsights | null>(null);
   const [chartData, setChartData] = useState<ChartData[]>([]);
+
+  const [discoverThemeSummaries, setDiscoverThemeSummaries] = useState<DiscoverCategorySummary[]>([]);
+  const [discoverEntitySummaries, setDiscoverEntitySummaries] = useState<DiscoverSubcategorySummary[]>([]);
+  const [discoverTop100Data, setDiscoverTop100Data] = useState<CategorizedUrlData[]>([]);
   
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [isChatLoading, setIsChatLoading] = useState<boolean>(false);
@@ -85,11 +89,22 @@ const App: React.FC = () => {
             const categorizedResults = await categorizeUrlsFromCsv(parsedData, apiKey, onProgress);
             
             setProgressMessage('Finalizing analysis...');
-            const { categorizedUrls, categorySummaries, subcategorySummaries } = processCategorizedData(categorizedResults, parsedData);
+            const { 
+                categorizedUrls, 
+                categorySummaries, 
+                subcategorySummaries,
+                discoverCategorySummaries,
+                discoverSubcategorySummaries,
+                discoverTop100Urls
+            } = processCategorizedData(categorizedResults, parsedData);
 
             setCategorizedData(categorizedUrls);
-            setAnalysisData(categorySummaries);
-            setSubcategoryAnalysisData(subcategorySummaries);
+            setThemeAnalysisData(categorySummaries);
+            setEntityAnalysisData(subcategorySummaries);
+            setDiscoverThemeSummaries(discoverCategorySummaries);
+            setDiscoverEntitySummaries(discoverSubcategorySummaries);
+            setDiscoverTop100Data(discoverTop100Urls);
+
             setStep('results');
             setCompletedSteps(prev => new Set(prev).add('results'));
         } catch (err: any) {
@@ -117,7 +132,7 @@ const App: React.FC = () => {
       setError("API Key is not set. Please refresh and enter your key.");
       return;
     }
-    if (analysisData.length === 0) {
+    if (themeAnalysisData.length === 0) {
       setError("No analysis data available to generate insights.");
       return;
     }
@@ -125,7 +140,7 @@ const App: React.FC = () => {
     setError(null);
     setProgressMessage('Generating strategic insights...');
     try {
-      const { insights, chartData } = await fetchInsights(analysisData, subcategoryAnalysisData, apiKey);
+      const { insights, chartData } = await fetchInsights(themeAnalysisData, entityAnalysisData, discoverTop100Data, apiKey);
       setInsights(insights);
       setChartData(chartData);
       setStep('insights');
@@ -137,7 +152,7 @@ const App: React.FC = () => {
       setIsLoading(false);
       setProgressMessage('');
     }
-  }, [analysisData, subcategoryAnalysisData, apiKey]);
+  }, [themeAnalysisData, entityAnalysisData, discoverTop100Data, apiKey]);
 
   const handleSendMessage = useCallback(async (message: string) => {
     if (!apiKey || !insights) return;
@@ -149,7 +164,7 @@ const App: React.FC = () => {
     setError(null);
 
     try {
-        const response = await fetchChatResponse(analysisData, subcategoryAnalysisData, insights, updatedHistory, message, apiKey);
+        const response = await fetchChatResponse(themeAnalysisData, entityAnalysisData, insights, updatedHistory, message, apiKey);
         const modelMessage: ChatMessage = { role: 'model', content: response };
         setChatHistory([...updatedHistory, modelMessage]);
     } catch (err: any) {
@@ -159,7 +174,7 @@ const App: React.FC = () => {
     } finally {
         setIsChatLoading(false);
     }
-  }, [apiKey, insights, chatHistory, analysisData, subcategoryAnalysisData]);
+  }, [apiKey, insights, chatHistory, themeAnalysisData, entityAnalysisData]);
 
 
   const handleSaveToHistory = () => {
@@ -170,10 +185,13 @@ const App: React.FC = () => {
       fileName: currentFile.name,
       websiteDomain,
       categorizedData,
-      analysisData,
-      subcategoryAnalysisData,
+      analysisData: themeAnalysisData,
+      subcategoryAnalysisData: entityAnalysisData,
       insights,
       chartData,
+      discoverCategorySummaries: discoverThemeSummaries,
+      discoverSubcategorySummaries: discoverEntitySummaries,
+      discoverTop100Data,
     };
     setHistory([newEntry, ...history]);
     alert("Analysis saved to history!");
@@ -181,12 +199,15 @@ const App: React.FC = () => {
 
   const handleLoadFromHistory = (entry: HistoryEntry) => {
     setCategorizedData(entry.categorizedData);
-    setAnalysisData(entry.analysisData);
-    setSubcategoryAnalysisData(entry.subcategoryAnalysisData);
+    setThemeAnalysisData(entry.analysisData);
+    setEntityAnalysisData(entry.subcategoryAnalysisData);
     setInsights(entry.insights);
     setChartData(entry.chartData);
     setCurrentFile(new File([], entry.fileName)); // Mock file for display
     setWebsiteDomain(entry.websiteDomain);
+    setDiscoverThemeSummaries(entry.discoverCategorySummaries || []);
+    setDiscoverEntitySummaries(entry.discoverSubcategorySummaries || []);
+    setDiscoverTop100Data(entry.discoverTop100Data || []);
     setCompletedSteps(new Set(['upload', 'results', 'insights', 'email']));
     setStep('insights');
     setError(null);
@@ -201,8 +222,11 @@ const App: React.FC = () => {
     setStep('upload');
     setCompletedSteps(new Set(['upload']));
     setCategorizedData([]);
-    setAnalysisData([]);
-    setSubcategoryAnalysisData([]);
+    setThemeAnalysisData([]);
+    setEntityAnalysisData([]);
+    setDiscoverThemeSummaries([]);
+    setDiscoverEntitySummaries([]);
+    setDiscoverTop100Data([]);
     setInsights(null);
     setChartData([]);
     setError(null);
@@ -233,8 +257,11 @@ const App: React.FC = () => {
         return (
           <ResultsTable
             categorizedData={categorizedData}
-            summaryData={analysisData}
-            subcategorySummaryData={subcategoryAnalysisData}
+            summaryData={themeAnalysisData}
+            subcategorySummaryData={entityAnalysisData}
+            discoverCategorySummaryData={discoverThemeSummaries}
+            discoverSubcategorySummaryData={discoverEntitySummaries}
+            discoverTop100Data={discoverTop100Data}
             onGetInsights={handleGetInsights}
             websiteDomain={websiteDomain}
           />
@@ -244,8 +271,8 @@ const App: React.FC = () => {
           <InsightsDisplay
             insights={insights}
             chartData={chartData}
-            analysisData={analysisData}
-            subcategoryAnalysisData={subcategoryAnalysisData}
+            analysisData={themeAnalysisData}
+            subcategoryAnalysisData={entityAnalysisData}
             websiteDomain={websiteDomain}
             onSaveToHistory={handleSaveToHistory}
             isSaved={history.some(h => h.insights === insights)}
@@ -259,7 +286,7 @@ const App: React.FC = () => {
             <EmailDraft
                 insights={insights}
                 chartData={chartData}
-                analysisData={analysisData}
+                analysisData={themeAnalysisData}
             />
         );
       case 'history':

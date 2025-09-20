@@ -65,6 +65,37 @@ const PdfReport = React.forwardRef<HTMLDivElement, PdfReportProps>(({ insights, 
             </div>
         </section>
 
+        {insights.discoverInsights && insights.discoverInsights.length > 0 && (
+          <section>
+            <h2 className="text-2xl font-semibold mb-4 text-purple-300 border-b border-gray-700 pb-2">Google Discover Opportunities</h2>
+            <div className="space-y-6">
+              {insights.discoverInsights.map((item, index) => (
+                <div key={`discover-${index}`} className="p-4 bg-gray-800 rounded-lg border border-gray-700 break-inside-avoid">
+                  <h3 className="font-bold text-lg text-purple-300">{item.entity}</h3>
+                  <p className="text-sm text-gray-400 mb-2">Total Clicks (Top 100): {item.totalClicks.toLocaleString()}</p>
+                  <p className="text-sm text-gray-300 italic mb-3">{item.reasoning}</p>
+                  <table className="min-w-full text-xs text-left text-gray-800 bg-white rounded-lg overflow-hidden">
+                    <thead className="bg-gray-300">
+                      <tr>
+                        <th className="px-3 py-2">Hook (Sub Entity)</th>
+                        <th className="px-3 py-2">Clicks</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {item.topSubEntities.map((sub, subIndex) => (
+                        <tr key={subIndex} className="border-b border-gray-200 bg-gray-100">
+                          <td className="px-3 py-2 font-medium">{sub.subEntity}</td>
+                          <td className="px-3 py-2">{sub.clicks.toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         <section>
           <h2 className="text-2xl font-semibold mb-4 text-cyan-300 border-b border-gray-700 pb-2">Performance Chart</h2>
           <div className="w-full h-80 bg-gray-800 p-4 rounded-lg">
@@ -88,17 +119,17 @@ const PdfReport = React.forwardRef<HTMLDivElement, PdfReportProps>(({ insights, 
         </section>
         
         <section>
-          <h2 className="text-2xl font-semibold mb-4 text-cyan-300 border-b border-gray-700 pb-2">Category Summary</h2>
+          <h2 className="text-2xl font-semibold mb-4 text-cyan-300 border-b border-gray-700 pb-2">Content Theme Summary</h2>
             <table className="min-w-full text-sm text-left text-gray-800 bg-white rounded-lg overflow-hidden">
                 <thead className="bg-gray-300 text-xs uppercase">
                     <tr>
-                        {['Category', '# Articles', 'Total Clicks', 'Avg Clicks', 'Tier'].map(h => <th key={h} className="px-4 py-2">{h}</th>)}
+                        {['Content Theme', '# Articles', 'Total Clicks', 'Avg Clicks', 'Tier'].map(h => <th key={h} className="px-4 py-2">{h}</th>)}
                     </tr>
                 </thead>
                 <tbody>
                     {analysisData.map((item) => (
-                        <tr key={item.Category} className={`border-b border-gray-200 ${getTierStyling(item.performanceTier)}`}>
-                            <td className="px-4 py-2 font-medium">{item.Category}</td>
+                        <tr key={item.ContentTheme} className={`border-b border-gray-200 ${getTierStyling(item.performanceTier)}`}>
+                            <td className="px-4 py-2 font-medium">{item.ContentTheme}</td>
                             <td className="px-4 py-2">{item.articleCount}</td>
                             <td className="px-4 py-2">{item.totalClicks.toLocaleString()}</td>
                             <td className="px-4 py-2 font-semibold">{item.averageClicks.toLocaleString()}</td>
@@ -110,18 +141,18 @@ const PdfReport = React.forwardRef<HTMLDivElement, PdfReportProps>(({ insights, 
         </section>
         
         <section>
-          <h2 className="text-2xl font-semibold mb-4 text-cyan-300 border-b border-gray-700 pb-2">Subcategory Summary</h2>
+          <h2 className="text-2xl font-semibold mb-4 text-cyan-300 border-b border-gray-700 pb-2">Entity Summary</h2>
             <table className="min-w-full text-sm text-left text-gray-800 bg-white rounded-lg overflow-hidden">
                 <thead className="bg-gray-300 text-xs uppercase">
                     <tr>
-                        {['Subcategory', 'Parent Category', '# Articles', 'Avg Clicks', 'Tier'].map(h => <th key={h} className="px-4 py-2">{h}</th>)}
+                        {['Entity', 'Parent Theme', '# Articles', 'Avg Clicks', 'Tier'].map(h => <th key={h} className="px-4 py-2">{h}</th>)}
                     </tr>
                 </thead>
                 <tbody>
                     {subcategoryAnalysisData.map((item) => (
-                        <tr key={item.Subcategory} className={`border-b border-gray-200 ${getTierStyling(item.performanceTier)}`}>
-                            <td className="px-4 py-2 font-medium">{item.Subcategory}</td>
-                            <td className="px-4 py-2">{item.ParentCategory}</td>
+                        <tr key={item.Entity} className={`border-b border-gray-200 ${getTierStyling(item.performanceTier)}`}>
+                            <td className="px-4 py-2 font-medium">{item.Entity}</td>
+                            <td className="px-4 py-2">{item.ParentTheme}</td>
                             <td className="px-4 py-2">{item.articleCount}</td>
                             <td className="px-4 py-2 font-semibold">{item.averageClicks.toLocaleString()}</td>
                             <td className="px-4 py-2 capitalize">{item.performanceTier}</td>

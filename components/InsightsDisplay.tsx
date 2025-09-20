@@ -157,6 +157,44 @@ const InsightsDisplay: React.FC<InsightsDisplayProps> = (props) => {
         </InsightCard>
       </div>
 
+      {insights.discoverInsights && insights.discoverInsights.length > 0 && (
+          <InsightCard title="Google Discover Opportunities">
+              <div className="space-y-6">
+                  {insights.discoverInsights.map((item, index) => (
+                      <div key={index} className="bg-gray-900/50 p-4 rounded-lg border border-gray-700">
+                          <h4 className="font-semibold text-lg text-purple-300">{item.entity}</h4>
+                          <p className="text-sm text-gray-400 mb-2">Total Clicks (from Top 100): <span className="font-bold text-gray-300">{item.totalClicks.toLocaleString()}</span></p>
+                          <p className="text-sm text-gray-300 italic mb-3">
+                              <strong className="text-purple-300">AI Reasoning:</strong> {item.reasoning}
+                          </p>
+                          <div className="overflow-x-auto rounded-md border border-gray-600">
+                              <table className="min-w-full text-sm">
+                                  <thead className="bg-gray-700/60">
+                                      <tr>
+                                          <th className="px-4 py-2 text-left font-medium text-gray-300">Hook (Sub Entity)</th>
+                                          <th className="px-4 py-2 text-left font-medium text-gray-300">Clicks</th>
+                                          <th className="px-4 py-2 text-left font-medium text-gray-300">URL</th>
+                                      </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-gray-600">
+                                      {item.topSubEntities.map((sub, subIndex) => (
+                                          <tr key={subIndex} className="hover:bg-gray-700/50">
+                                              <td className="px-4 py-2 font-medium text-white">{sub.subEntity}</td>
+                                              <td className="px-4 py-2 text-gray-300">{sub.clicks.toLocaleString()}</td>
+                                              <td className="px-4 py-2 text-cyan-400 max-w-xs truncate" title={sub.url}>
+                                                  <a href={sub.url} target="_blank" rel="noopener noreferrer" className="hover:underline">{sub.url}</a>
+                                              </td>
+                                          </tr>
+                                      ))}
+                                  </tbody>
+                              </table>
+                          </div>
+                      </div>
+                  ))}
+              </div>
+          </InsightCard>
+      )}
+
       <div>
         <InsightCard title="Top & Potential Performers by Average Clicks">
           <div className="w-full h-80 mt-4">

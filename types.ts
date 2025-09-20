@@ -8,19 +8,21 @@ export interface CsvRow {
 
 export interface CategorizedItem {
   url: string;
-  category: string;
-  subcategory: string;
+  contentTheme: string;
+  entity: string;
+  subEntity: string;
 }
 
 export interface CategorizedUrlData extends CsvRow {
-  Category: string;
-  Subcategory: string;
+  ContentTheme: string;
+  Entity: string;
+  SubEntity: string;
   Clicks_Contribution_Percentage: number;
   Impressions_Contribution_Percentage: number;
 }
 
 export interface CategorySummary {
-  Category: string;
+  ContentTheme: string;
   articleCount: number;
   totalClicks: number;
   totalImpressions: number;
@@ -29,13 +31,39 @@ export interface CategorySummary {
 }
 
 export interface SubcategorySummary {
-  Subcategory: string;
-  ParentCategory: string;
+  Entity: string;
+  ParentTheme: string;
   articleCount: number;
   totalClicks: number;
   totalImpressions: number;
   averageClicks: number;
   performanceTier: 'top' | 'potential' | 'standard';
+}
+
+export interface DiscoverCategorySummary {
+  ContentTheme: string;
+  articleCount: number; // in top 100
+  totalClicks: number; // from top 100
+  performanceTier: 'top' | 'potential' | 'standard';
+}
+
+export interface DiscoverSubcategorySummary {
+  Entity: string;
+  ParentTheme: string;
+  articleCount: number; // in top 100
+  totalClicks: number; // from top 100
+  performanceTier: 'top' | 'potential' | 'standard';
+}
+
+export interface DiscoverInsight {
+    entity: string;
+    totalClicks: number;
+    reasoning: string;
+    topSubEntities: {
+        subEntity: string;
+        url: string;
+        clicks: number;
+    }[];
 }
 
 export interface AiInsights {
@@ -46,6 +74,7 @@ export interface AiInsights {
     topicName: string;
     reasoning: string;
   };
+  discoverInsights?: DiscoverInsight[];
 }
 
 export interface ChartData {
@@ -64,6 +93,9 @@ export interface HistoryEntry {
   subcategoryAnalysisData: SubcategorySummary[];
   insights: AiInsights;
   chartData: ChartData[];
+  discoverCategorySummaries: DiscoverCategorySummary[];
+  discoverSubcategorySummaries: DiscoverSubcategorySummary[];
+  discoverTop100Data: CategorizedUrlData[];
 }
 
 export interface ChatMessage {
