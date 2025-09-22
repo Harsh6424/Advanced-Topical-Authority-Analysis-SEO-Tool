@@ -1,9 +1,12 @@
+
 export type AppStep = 'upload' | 'results' | 'insights' | 'email' | 'history';
 
 export interface CsvRow {
   URL: string;
   Clicks: number;
   Impressions: number;
+  Title?: string;
+  'Author Name'?: string;
 }
 
 export interface CategorizedItem {
@@ -38,6 +41,22 @@ export interface SubcategorySummary {
   totalImpressions: number;
   averageClicks: number;
   performanceTier: 'top' | 'potential' | 'standard';
+}
+
+export interface EntityAnalysisSummary {
+  Entity: string;
+  articleCount: number;
+  totalClicks: number;
+  averageClicks: number;
+  performanceTier: 'top' | 'potential' | 'standard';
+}
+
+export interface AuthorSummary {
+    authorName: string;
+    articleCount: number;
+    totalClicks: number;
+    totalImpressions: number;
+    averageClicks: number;
 }
 
 export interface DiscoverCategorySummary {
@@ -91,6 +110,8 @@ export interface HistoryEntry {
   categorizedData: CategorizedUrlData[];
   analysisData: CategorySummary[];
   subcategoryAnalysisData: SubcategorySummary[];
+  entityAnalysisData: EntityAnalysisSummary[];
+  authorAnalysisData: AuthorSummary[];
   insights: AiInsights;
   chartData: ChartData[];
   discoverCategorySummaries: DiscoverCategorySummary[];

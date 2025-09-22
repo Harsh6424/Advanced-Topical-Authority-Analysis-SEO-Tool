@@ -1,5 +1,5 @@
 {
-  "name": "Advanced Topical Authority Analysis AI Agent",
-  "description": "An AI-powered tool to analyze website topical authority from a CSV file. It categorizes URLs, analyzes performance metrics, and provides strategic content insights with visualizations.",
+  "name": "Content Strategy AI",
+  "description": "An AI-powered tool to analyze website content performance from a CSV file, providing strategic insights and visualizations.",
   "requestFramePermissions": []
 }

@@ -1,6 +1,7 @@
+
 import React from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend } from 'recharts';
-import type { AiInsights, ChartData, CategorySummary, SubcategorySummary } from '../types';
+import type { AiInsights, ChartData, CategorySummary, SubcategorySummary, EntityAnalysisSummary } from '../types';
 import { InsightIcon } from './Icons';
 
 interface PdfReportProps {
@@ -8,10 +9,11 @@ interface PdfReportProps {
   chartData: ChartData[];
   analysisData: CategorySummary[];
   subcategoryAnalysisData: SubcategorySummary[];
+  entityAnalysisData: EntityAnalysisSummary[];
   websiteDomain: string | null;
 }
 
-const PdfReport = React.forwardRef<HTMLDivElement, PdfReportProps>(({ insights, chartData, analysisData, subcategoryAnalysisData, websiteDomain }, ref) => {
+const PdfReport = React.forwardRef<HTMLDivElement, PdfReportProps>(({ insights, chartData, analysisData, subcategoryAnalysisData, entityAnalysisData, websiteDomain }, ref) => {
   if (!insights) return null;
 
   const TIER_COLORS = { top: '#2DD4BF', potential: '#FBBF24' };
@@ -28,7 +30,7 @@ const PdfReport = React.forwardRef<HTMLDivElement, PdfReportProps>(({ insights, 
     <div ref={ref} className="p-8 bg-gray-900 text-gray-100 font-sans" style={{ width: '800px' }}>
       <header className="text-center mb-8 border-b-2 border-cyan-400 pb-4">
         <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-cyan-400">
-          Topical Authority Analysis Report
+          Content Strategy Report
         </h1>
         <p className="mt-2 text-lg text-gray-400">Generated on {new Date().toLocaleDateString()}</p>
         {websiteDomain && <p className="mt-1 text-md text-gray-500">Analysis for: {websiteDomain}</p>}
@@ -139,9 +141,31 @@ const PdfReport = React.forwardRef<HTMLDivElement, PdfReportProps>(({ insights, 
                 </tbody>
             </table>
         </section>
+
+        <section>
+          <h2 className="text-2xl font-semibold mb-4 text-cyan-300 border-b border-gray-700 pb-2">Entity Analysis</h2>
+            <table className="min-w-full text-sm text-left text-gray-800 bg-white rounded-lg overflow-hidden">
+                <thead className="bg-gray-300 text-xs uppercase">
+                    <tr>
+                        {['Entity', '# of Articles', 'Total Clicks', 'Average Clicks/Article', 'Tier'].map(h => <th key={h} className="px-4 py-2">{h}</th>)}
+                    </tr>
+                </thead>
+                <tbody>
+                    {entityAnalysisData.map((item) => (
+                        <tr key={`${item.Entity}-analysis-pdf`} className={`border-b border-gray-200 ${getTierStyling(item.performanceTier)}`}>
+                            <td className="px-4 py-2 font-medium">{item.Entity}</td>
+                            <td className="px-4 py-2">{item.articleCount}</td>
+                            <td className="px-4 py-2">{item.totalClicks.toLocaleString()}</td>
+                            <td className="px-4 py-2 font-semibold">{item.averageClicks.toLocaleString()}</td>
+                            <td className="px-4 py-2 capitalize">{item.performanceTier}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </section>
         
         <section>
-          <h2 className="text-2xl font-semibold mb-4 text-cyan-300 border-b border-gray-700 pb-2">Entity Summary</h2>
+          <h2 className="text-2xl font-semibold mb-4 text-cyan-300 border-b border-gray-700 pb-2">Entity Summary (Detailed)</h2>
             <table className="min-w-full text-sm text-left text-gray-800 bg-white rounded-lg overflow-hidden">
                 <thead className="bg-gray-300 text-xs uppercase">
                     <tr>
@@ -150,7 +174,7 @@ const PdfReport = React.forwardRef<HTMLDivElement, PdfReportProps>(({ insights, 
                 </thead>
                 <tbody>
                     {subcategoryAnalysisData.map((item) => (
-                        <tr key={item.Entity} className={`border-b border-gray-200 ${getTierStyling(item.performanceTier)}`}>
+                        <tr key={`${item.ParentTheme}-${item.Entity}`} className={`border-b border-gray-200 ${getTierStyling(item.performanceTier)}`}>
                             <td className="px-4 py-2 font-medium">{item.Entity}</td>
                             <td className="px-4 py-2">{item.ParentTheme}</td>
                             <td className="px-4 py-2">{item.articleCount}</td>

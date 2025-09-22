@@ -1,5 +1,6 @@
+
 import React, { useState, useCallback, useEffect } from 'react';
-import type { AppStep, CategorizedUrlData, CategorySummary, SubcategorySummary, AiInsights, ChartData, CsvRow, HistoryEntry, ChatMessage, DiscoverCategorySummary, DiscoverSubcategorySummary } from './types';
+import type { AppStep, CategorizedUrlData, CategorySummary, SubcategorySummary, AiInsights, ChartData, CsvRow, HistoryEntry, ChatMessage, DiscoverCategorySummary, DiscoverSubcategorySummary, AuthorSummary, EntityAnalysisSummary } from './types';
 import { categorizeUrlsFromCsv, fetchInsights, fetchChatResponse } from './services/geminiService';
 import { parseCsv, processCategorizedData, getDomainFromUrl } from './utils/dataUtils';
 import { useLocalStorage } from './hooks/useLocalStorage';
@@ -26,7 +27,9 @@ const App: React.FC = () => {
   const [originalData, setOriginalData] = useState<CsvRow[]>([]);
   const [categorizedData, setCategorizedData] = useState<CategorizedUrlData[]>([]);
   const [themeAnalysisData, setThemeAnalysisData] = useState<CategorySummary[]>([]);
-  const [entityAnalysisData, setEntityAnalysisData] = useState<SubcategorySummary[]>([]);
+  const [subcategoryAnalysisData, setSubcategoryAnalysisData] = useState<SubcategorySummary[]>([]);
+  const [entityAnalysisData, setEntityAnalysisData] = useState<EntityAnalysisSummary[]>([]);
+  const [authorAnalysisData, setAuthorAnalysisData] = useState<AuthorSummary[]>([]);
   const [insights, setInsights] = useState<AiInsights | null>(null);
   const [chartData, setChartData] = useState<ChartData[]>([]);
 
@@ -83,7 +86,7 @@ const App: React.FC = () => {
             }
             
             const onProgress = ({ current, total }: { current: number; total: number }) => {
-                setProgressMessage(`Categorizing URLs: Batch ${current} of ${total}...`);
+                setProgressMessage(`Categorizing content: Batch ${current} of ${total}...`);
             };
             
             const categorizedResults = await categorizeUrlsFromCsv(parsedData, apiKey, onProgress);
@@ -93,6 +96,8 @@ const App: React.FC = () => {
                 categorizedUrls, 
                 categorySummaries, 
                 subcategorySummaries,
+                entitySummaries,
+                authorSummaries,
                 discoverCategorySummaries,
                 discoverSubcategorySummaries,
                 discoverTop100Urls
@@ -100,7 +105,9 @@ const App: React.FC = () => {
 
             setCategorizedData(categorizedUrls);
             setThemeAnalysisData(categorySummaries);
-            setEntityAnalysisData(subcategorySummaries);
+            setSubcategoryAnalysisData(subcategorySummaries);
+            setEntityAnalysisData(entitySummaries);
+            setAuthorAnalysisData(authorSummaries);
             setDiscoverThemeSummaries(discoverCategorySummaries);
             setDiscoverEntitySummaries(discoverSubcategorySummaries);
             setDiscoverTop100Data(discoverTop100Urls);
@@ -140,7 +147,7 @@ const App: React.FC = () => {
     setError(null);
     setProgressMessage('Generating strategic insights...');
     try {
-      const { insights, chartData } = await fetchInsights(themeAnalysisData, entityAnalysisData, discoverTop100Data, apiKey);
+      const { insights, chartData } = await fetchInsights(themeAnalysisData, subcategoryAnalysisData, discoverTop100Data, apiKey);
       setInsights(insights);
       setChartData(chartData);
       setStep('insights');
@@ -152,7 +159,7 @@ const App: React.FC = () => {
       setIsLoading(false);
       setProgressMessage('');
     }
-  }, [themeAnalysisData, entityAnalysisData, discoverTop100Data, apiKey]);
+  }, [themeAnalysisData, subcategoryAnalysisData, discoverTop100Data, apiKey]);
 
   const handleSendMessage = useCallback(async (message: string) => {
     if (!apiKey || !insights) return;
@@ -164,7 +171,7 @@ const App: React.FC = () => {
     setError(null);
 
     try {
-        const response = await fetchChatResponse(themeAnalysisData, entityAnalysisData, insights, updatedHistory, message, apiKey);
+        const response = await fetchChatResponse(themeAnalysisData, subcategoryAnalysisData, insights, updatedHistory, message, apiKey);
         const modelMessage: ChatMessage = { role: 'model', content: response };
         setChatHistory([...updatedHistory, modelMessage]);
     } catch (err: any) {
@@ -174,7 +181,7 @@ const App: React.FC = () => {
     } finally {
         setIsChatLoading(false);
     }
-  }, [apiKey, insights, chatHistory, themeAnalysisData, entityAnalysisData]);
+  }, [apiKey, insights, chatHistory, themeAnalysisData, subcategoryAnalysisData]);
 
 
   const handleSaveToHistory = () => {
@@ -186,7 +193,9 @@ const App: React.FC = () => {
       websiteDomain,
       categorizedData,
       analysisData: themeAnalysisData,
-      subcategoryAnalysisData: entityAnalysisData,
+      subcategoryAnalysisData: subcategoryAnalysisData,
+      entityAnalysisData: entityAnalysisData,
+      authorAnalysisData,
       insights,
       chartData,
       discoverCategorySummaries: discoverThemeSummaries,
@@ -200,7 +209,9 @@ const App: React.FC = () => {
   const handleLoadFromHistory = (entry: HistoryEntry) => {
     setCategorizedData(entry.categorizedData);
     setThemeAnalysisData(entry.analysisData);
-    setEntityAnalysisData(entry.subcategoryAnalysisData);
+    setSubcategoryAnalysisData(entry.subcategoryAnalysisData);
+    setEntityAnalysisData(entry.entityAnalysisData || []);
+    setAuthorAnalysisData(entry.authorAnalysisData || []);
     setInsights(entry.insights);
     setChartData(entry.chartData);
     setCurrentFile(new File([], entry.fileName)); // Mock file for display
@@ -223,7 +234,9 @@ const App: React.FC = () => {
     setCompletedSteps(new Set(['upload']));
     setCategorizedData([]);
     setThemeAnalysisData([]);
+    setSubcategoryAnalysisData([]);
     setEntityAnalysisData([]);
+    setAuthorAnalysisData([]);
     setDiscoverThemeSummaries([]);
     setDiscoverEntitySummaries([]);
     setDiscoverTop100Data([]);
@@ -258,7 +271,9 @@ const App: React.FC = () => {
           <ResultsTable
             categorizedData={categorizedData}
             summaryData={themeAnalysisData}
-            subcategorySummaryData={entityAnalysisData}
+            subcategorySummaryData={subcategoryAnalysisData}
+            entitySummaryData={entityAnalysisData}
+            authorSummaryData={authorAnalysisData}
             discoverCategorySummaryData={discoverThemeSummaries}
             discoverSubcategorySummaryData={discoverEntitySummaries}
             discoverTop100Data={discoverTop100Data}
@@ -272,7 +287,8 @@ const App: React.FC = () => {
             insights={insights}
             chartData={chartData}
             analysisData={themeAnalysisData}
-            subcategoryAnalysisData={entityAnalysisData}
+            subcategoryAnalysisData={subcategoryAnalysisData}
+            entityAnalysisData={entityAnalysisData}
             websiteDomain={websiteDomain}
             onSaveToHistory={handleSaveToHistory}
             isSaved={history.some(h => h.insights === insights)}
@@ -307,7 +323,7 @@ const App: React.FC = () => {
       <div className="w-full max-w-7xl mx-auto">
         <header className="text-center mb-6">
           <h1 className="text-4xl sm:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-cyan-400">
-            Advanced Topical Authority Analysis AI Agent
+            Content Strategy AI
           </h1>
           <p className="mt-2 text-lg text-gray-400">
             Unlock content strategy insights from your website data.

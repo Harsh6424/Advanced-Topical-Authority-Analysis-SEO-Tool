@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import type { AiInsights, ChartData, CategorySummary, SubcategorySummary, ChatMessage } from '../types';
+import type { AiInsights, ChartData, CategorySummary, SubcategorySummary, ChatMessage, EntityAnalysisSummary } from '../types';
 import { InsightIcon, SaveIcon, PdfIcon } from './Icons';
 import ChatBox from './ChatBox';
 import PdfReport from './PdfReport';
@@ -14,6 +14,7 @@ interface InsightsDisplayProps {
   chartData: ChartData[];
   analysisData: CategorySummary[];
   subcategoryAnalysisData: SubcategorySummary[];
+  entityAnalysisData: EntityAnalysisSummary[];
   websiteDomain: string | null;
   onSaveToHistory: () => void;
   isSaved: boolean;

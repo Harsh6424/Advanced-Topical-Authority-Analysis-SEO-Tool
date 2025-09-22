@@ -1,5 +1,5 @@
 import React from 'react';
-import type { CategorizedUrlData, CategorySummary, SubcategorySummary, DiscoverCategorySummary, DiscoverSubcategorySummary } from '../types';
+import type { CategorizedUrlData, CategorySummary, SubcategorySummary, DiscoverCategorySummary, DiscoverSubcategorySummary, AuthorSummary, EntityAnalysisSummary } from '../types';
 import { exportToExcel } from '../utils/dataUtils';
 import { DownloadIcon, InsightIcon } from './Icons';
 
@@ -7,6 +7,8 @@ interface ResultsTableProps {
   categorizedData: CategorizedUrlData[];
   summaryData: CategorySummary[];
   subcategorySummaryData: SubcategorySummary[];
+  entitySummaryData: EntityAnalysisSummary[];
+  authorSummaryData: AuthorSummary[];
   discoverCategorySummaryData: DiscoverCategorySummary[];
   discoverSubcategorySummaryData: DiscoverSubcategorySummary[];
   discoverTop100Data: CategorizedUrlData[];
@@ -17,7 +19,9 @@ interface ResultsTableProps {
 const ResultsTable: React.FC<ResultsTableProps> = ({ 
     categorizedData, 
     summaryData, 
-    subcategorySummaryData, 
+    subcategorySummaryData,
+    entitySummaryData, 
+    authorSummaryData,
     discoverCategorySummaryData,
     discoverSubcategorySummaryData,
     discoverTop100Data,
@@ -29,7 +33,9 @@ const ResultsTable: React.FC<ResultsTableProps> = ({
     exportToExcel(
         categorizedData, 
         summaryData, 
-        subcategorySummaryData, 
+        subcategorySummaryData,
+        entitySummaryData, 
+        authorSummaryData,
         discoverCategorySummaryData,
         discoverSubcategorySummaryData,
         discoverTop100Data,
@@ -109,10 +115,40 @@ const ResultsTable: React.FC<ResultsTableProps> = ({
           </div>
         </div>
         
-        {/* Subcategory Summary Table */}
+        {/* NEW Entity Analysis Table */}
         <div className="mb-12">
-          <h3 className="text-xl font-semibold mb-3 text-cyan-300">Topical Authority: Entity Performance</h3>
-           <p className="text-sm text-gray-400 mb-3 -mt-2">Based on Average Clicks across all articles.</p>
+          <h3 className="text-xl font-semibold mb-3 text-cyan-300">Entity Analysis</h3>
+           <p className="text-sm text-gray-400 mb-3 -mt-2">A focused view of entity performance based on Average Clicks.</p>
+          <div className="overflow-x-auto rounded-lg border border-gray-700">
+            <table className="min-w-full divide-y divide-gray-700 bg-gray-800">
+              <thead className="bg-gray-700/50">
+                <tr>
+                  {['Entity', '# of articles', 'Total Clicks', 'Average clicks/article'].map(header => (
+                    <th key={header} scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">{header}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-700">
+                {entitySummaryData.map((item) => {
+                  const styling = getTierStyling(item.performanceTier);
+                  return (
+                    <tr key={`${item.Entity}-analysis`} className={`${styling.row} hover:bg-gray-700/50`}>
+                      <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${styling.text}`}>{item.Entity}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{item.articleCount}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{item.totalClicks.toLocaleString()}</td>
+                      <td className={`px-6 py-4 whitespace-nowrap text-sm font-semibold ${styling.text}`}>{item.averageClicks.toLocaleString()}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* OLD Subcategory Summary Table */}
+        <div className="mb-12">
+          <h3 className="text-xl font-semibold mb-3 text-cyan-300">Topical Authority: Entity Performance (Detailed)</h3>
+           <p className="text-sm text-gray-400 mb-3 -mt-2">Based on Average Clicks across all articles, including parent theme context.</p>
           <div className="overflow-x-auto rounded-lg border border-gray-700">
             <table className="min-w-full divide-y divide-gray-700 bg-gray-800">
               <thead className="bg-gray-700/50">
@@ -140,6 +176,36 @@ const ResultsTable: React.FC<ResultsTableProps> = ({
             </table>
           </div>
         </div>
+
+        {/* Author Summary Table */}
+        {authorSummaryData && authorSummaryData.length > 0 && (
+          <div className="mb-12">
+            <h3 className="text-xl font-semibold mb-3 text-cyan-300">Author Performance</h3>
+            <p className="text-sm text-gray-400 mb-3 -mt-2">Based on Total Clicks across all articles by each author.</p>
+            <div className="overflow-x-auto rounded-lg border border-gray-700">
+              <table className="min-w-full divide-y divide-gray-700 bg-gray-800">
+                <thead className="bg-gray-700/50">
+                  <tr>
+                    {['Author Name', '# of Articles', 'Total Clicks', 'Total Impressions', 'Average Clicks'].map(header => (
+                      <th key={header} scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">{header}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-700">
+                  {authorSummaryData.map((item) => (
+                    <tr key={item.authorName} className="hover:bg-gray-700/50">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{item.authorName}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{item.articleCount}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{item.totalClicks.toLocaleString()}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{item.totalImpressions.toLocaleString()}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-white">{item.averageClicks.toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* Discover Category Summary Table */}
         <div className="mb-12">

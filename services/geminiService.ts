@@ -11,48 +11,72 @@ export async function categorizeUrlsFromCsv(
     if (!apiKey) throw new Error("API key is required.");
     const ai = new GoogleGenAI({ apiKey });
     
-    const urls = data.map(row => row.URL);
-    if (urls.length === 0) return [];
+    if (data.length === 0) return [];
+    
+    const hasTitles = !!data[0]?.Title;
 
     const allCategorizedItems: CategorizedItem[] = [];
-    const totalBatches = Math.ceil(urls.length / BATCH_SIZE);
+    const totalBatches = Math.ceil(data.length / BATCH_SIZE);
 
-    for (let i = 0; i < urls.length; i += BATCH_SIZE) {
-        const batchUrls = urls.slice(i, i + BATCH_SIZE);
+    for (let i = 0; i < data.length; i += BATCH_SIZE) {
+        const batchData = data.slice(i, i + BATCH_SIZE);
+        const batchItems = hasTitles
+            ? batchData.map(row => ({ url: row.URL, title: row.Title }))
+            : batchData.map(row => ({ url: row.URL }));
+
         const currentBatchNumber = (i / BATCH_SIZE) + 1;
 
         if (onProgress) {
             onProgress({ current: currentBatchNumber, total: totalBatches });
         }
+        
+        const examples = `
+- Item: {"url": "https://hothardware.com/reviews/dell-pro-14-premium-laptop-review-a-case-study-in-minimalism"${hasTitles ? ', "title": "Dell Pro 14 Premium Laptop Review: A Case Study In Minimalism"' : ''}}
+- Desired Output:
+  - contentTheme: "Laptop Reviews"
+  - entity: "Dell Laptops"
+  - subEntity: "Dell Pro 14 Premium Review"
+
+- Item: {"url": "https://hothardware.com/reviews/bose-quietcomfort-ultra-earbuds-2nd-gen-review"${hasTitles ? ', "title": "Bose QuietComfort Ultra Earbuds 2nd Gen Review"' : ''}}
+- Desired Output:
+  - contentTheme: "Audio Reviews"
+  - entity: "Bose Earbuds"
+  - subEntity: "QuietComfort Ultra 2nd Gen Review"
+
+- Item: {"url": "https://hothardware.com/news/potent-gaming-laptops-rtx-40-50-firepower-800-off"${hasTitles ? ', "title": "Potent Gaming Laptops With RTX 4050 Firepower Are A Whopping $800 Off"' : ''}}
+- Desired Output:
+  - contentTheme: "Laptop Deals"
+  - entity: "Gaming Laptop Deals"
+  - subEntity: "$800 Off RTX 40/50 Laptops"
+
+- Item: {"url": "https://hothardware.com/news/intel-core-ultra-7-365k-arrow-lake-refresh-cpu-benchmark-leak"${hasTitles ? ', "title": "Intel Core Ultra 7 365K Arrow Lake Refresh CPU Benchmark Leak"' : ''}}
+- Desired Output:
+  - contentTheme: "CPU News"
+  - entity: "Intel Arrow Lake CPUs"
+  - subEntity: "CPU Benchmark Leak"
+`;
 
         const prompt = `
-            You are an intelligent content categorization engine.
-            For each URL provided, your task is to determine a broad 'Content Theme', a specific 'Entity', and a click-worthy 'Sub Entity'.
+            You are an expert content categorization engine. Your goal is to create a three-level taxonomy: a specific 'Content Theme', a more granular 'Entity', and a 'Sub Entity' that acts as a hook.
 
-            Instructions:
-            1.  **Analyze the Slug:** Infer the content's topic from the URL slug.
-            2.  **Assign Content Theme (Broad):** Assign a high-level, general theme.
-            3.  **Assign Entity (Specific):** Assign a more detailed, narrow entity that captures the specific topic.
-            4.  **Assign Sub Entity (The Hook):** Identify the key factor or hook that would make a user click. This should be concise and compelling.
-            5.  The goal is a three-level taxonomy for deep analysis. Avoid generic labels.
-            6.  Return ONLY a JSON array of objects, each with "url", "contentTheme", "entity", and "subEntity" keys. Do not add any explanation or surrounding text.
+            **Crucial Instructions:**
+            1.  **Analyze the ${hasTitles ? 'Title and URL' : 'URL Slug'}:** Infer the topic and, most importantly, the INTENT of the content. The title is the primary source if available.
+            2.  **Assign Content Theme (Specific & Intent-Driven):** This is the most critical step. The theme MUST combine the main topic with the content's format or user intent. It should be a concise phrase (e.g., 2-3 words).
+                -   First, identify the core topic (e.g., "Laptops," "Audio," "CPUs").
+                -   Second, determine the content's primary purpose or format. Is it a review, a news piece, a deal/offer, a guide, a comparison, a benchmark analysis, or something else? This context is key.
+                -   Combine them into a specific theme. For example:
+                    -   An article reviewing a laptop becomes "Laptop Reviews," not just "Laptops."
+                    -   An article announcing a sale on earbuds becomes "Earbud Deals," not just "Audio."
+                    -   An article reporting a CPU benchmark leak becomes "CPU News," not just "CPUs."
+            3.  **Assign Entity (The Subject):** This is the specific subject of the article. For "Laptop Reviews," the entity might be "Dell Laptops" or "Alienware Laptops."
+            4.  **Assign Sub Entity (The Hook):** The specific, click-worthy detail. For a Dell laptop review, it could be "Dell Pro 14 Premium Review." For a deal, it might be "$800 Off RTX Laptops."
+            5.  **Output Format:** Return ONLY a JSON array of objects with "url", "contentTheme", "entity", and "subEntity" keys. The "url" MUST be the original URL. Do not add any explanation or surrounding text.
 
-            Here are some examples of the desired output:
-            - URL: "https://hothardware.com/news/microsoft-finally-fixed-windows-10-free-one-year-extended-security-updates-enrollment"
-              - contentTheme: "OS Updates"
-              - entity: "Windows 10 Updates"
-              - subEntity: "Free One Year Updates"
-            - URL: "https://hothardware.com/news/intel-core-ultra-7-365k-arrow-lake-refresh-cpu-benchmark-leak"
-              - contentTheme: "CPUs"
-              - entity: "Intel Arrow Lake CPUs"
-              - subEntity: "CPU Benchmark Leak"
-            - URL: "https://hothardware.com/news/potent-gaming-laptops-rtx-40-50-firepower-800-off"
-              - contentTheme: "Laptops"
-              - entity: "RTX Laptops"
-              - subEntity: "Offer Price Reduction"
+            **Examples of the required output structure and logic:**
+            ${examples}
 
-            Here is the list of URLs to categorize:
-            ${JSON.stringify(batchUrls)}
+            Here is the list of items to categorize:
+            ${JSON.stringify(batchItems)}
         `;
 
         try {
